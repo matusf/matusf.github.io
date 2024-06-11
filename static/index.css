@@ -229,7 +229,7 @@ body>pre {
     }
 }
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) {
     html {
         background: #111;
         color: #fff;
@@ -247,18 +247,22 @@ body>pre {
     #title-block-header .date {
         color: #aaa;
     }
-}
+} */
 
-.footnote-ref {
+.footnote-reference a {
     text-decoration: none !important;
 }
 
-.footnote-ref sup:before {
+.footnote-reference a sup:before {
     content: '[';
 }
 
-.footnote-ref sup:after {
+.footnote-reference a sup:after {
     content: ']';
+}
+
+.footnote-definition p {
+    display: inline;
 }
 
 /* Syntax highlighting overrides */
@@ -282,10 +286,10 @@ code span.ss {
     color: #444;
 }
 
-@media (prefers-color-scheme: dark) {
+/* @media (prefers-color-scheme: dark) {
 
     code span.st,
     code span.ss {
         color: #ccc;
     }
-}
+} */
