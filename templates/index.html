@@ -1,8 +1,55 @@
 {% extends "base.html" %}
 
 {% block content %}
-<h1 class="title">
-    This is my blog made with Zola.
-</h1>
-<p>Click <a href="{{ get_url(path='@/blog/_index.md') }}">here</a> to see my posts.</p>
+<main class="index-page">
+    <header>
+        <h1>Matúš Ferech</h1>
+        <p>Software engineering, systems programming and distributed systems</p>
+    </header>
+
+    <h2 class="title">Talks</h2>
+    <ul class="index">
+        {% set section = get_section(path="talks/_index.md") %}
+        {% for talk in section.extra.talks %}
+        <li>
+            <a href="{{ talk.url }}">{{ talk.title }}</a>
+            <span>{{ talk.venue }}, <time>{{ talk.date | date(format="%B %d, %Y") }}</time></span>
+        </li>
+        {% endfor %}
+    </ul>
+
+    <h2 class="title">Articles</h2>
+    <ul class="index">
+        {% set section = get_section(path="articles/_index.md") %}
+        {% for article in section.extra.articles %}
+        <li>
+            <a href="{{ article.url }}">{{ article.title }}</a>
+            {{ article.venue }}
+        </li>
+        {% endfor %}
+    </ul>
+
+    <h2 class="title">Projects</h2>
+    <ul class="index">
+        {% set section = get_section(path="projects/_index.md") %}
+        {% for project in section.extra.projects %}
+        <li>
+            <a href="{{ project.url }}">{{ project.title }}</a>
+            {{ project.description }}
+        </li>
+        {% endfor %}
+    </ul>
+
+    <h2 class="title">Posts</h2>
+    <ul class="index">
+        {% set section = get_section(path="posts/_index.md") %}
+        {% for post in section.pages %}
+        <li>
+            <a href="{{ post.permalink }}">{{ post.title }}</a>
+            <time>{{ post.date | date(format="%B %d, %Y") }}</time>
+        </li>
+        {% endfor %}
+    </ul>
+</main>
+
 {% endblock content %}
