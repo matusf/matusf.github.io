@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://matusf.github.io/reset.css">
+    <link rel="stylesheet" href="https://matusf.github.io/index.css">
+    <title>Matúš Ferech</title>
+</head>
+
+<body>
+    <!-- <nav class="post-nav before">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/about">About</a></li>
+            <li><a href="/atom.xml">Feed</a></li>
+        </ul>
+    </nav> -->
+    
+
+<header id="title-block-header">
+    <h1 class="title">Let&#x27;s Hijack Some Packages!</h1>
+    <p class="author">
+        Matúš Ferech
+    </p>
+    <p class="date">2020-10-29</p>
+</header>
+<p>Being able to hijack a Python package gives you a lot of opportunities. <code>pip</code> does not just place a package to some specified location. It runs the <code>setup.py</code> file that comes with most packages. This means you are effectively running unknown code on your machine every time you install a new package. Moreover, since <code>pip</code> runs as your user, it has the same permissions you do<sup class="footnote-reference"><a href="#1">1</a></sup>. It can read ssh keys, gpg keys, inspect your home directory or install ransomware, you name it. Furthermore, according to the <a href="https://www.tiobe.com/tiobe-index/python/">tiobe index</a>, Python is one of the most used languages in the world which makes it even more valuable resource to hijack. So, I hope, you are sold. Let’s do it!</p>
+<p>Installing a malicious package on someone's computer is easier than one would think. To find out how do we perform the attack, we need to understand how <code>pip</code> resolution works. Firstly, pip queries all repositories it knows. The default one is PyPI, however, you can specify additional ones with <code>--extra-index-url</code> option. After getting responses, it chooses the latest available version of the package. If responses with the same versions are received from multiple repositories, <code>pip</code> <a href="https://github.com/pypa/pip/issues/5045#issue-301252726">prefers PyPI</a> or treats them equally.</p>
+<p>The important part for us is that it chooses the package with the latest version. To inject our malicious package, all we need to do is to guess the name of a package and create a new one with a higher version. Then we upload it PyPI. We choose PyPI since it’s the most widely used registry. Now when someone tries to install the package with the same name from some internal registry, <code>pip</code> will find our malicious version on PyPI and download it instead.</p>
+<h2 id="what-can-we-do-about-it">What can we do about it?</h2>
+<p>One thing we can do is to install only from trusted registries, which is not ideal. To install a package from an internal repository, we would need to host its dependencies as well. How will we choose which dependencies to host? The simplest solution would be to mirror the PyPI. However, that is not always possible<sup class="footnote-reference"><a href="#2">2</a></sup>.</p>
+<p><code>pip</code> can be also used in <a href="https://pip.pypa.io/en/stable/reference/pip_install/#hash-checking-mode">hash-checking mode</a> to verify packages against tempering. To ensure the authenticity, developers need to download hashes for every package by hand from registries and verify it themselves, which is so tedious and clumsy nobody does it. Some tools like <a href="https://github.com/python-poetry/poetry">poetry</a> try to make it more userfriendly and download and verify those hashes for you, nonetheless, since they're downloaded automatically from repositories, you lose the authenticity and are back in integrity check only.</p>
+<p>Another solution is to be faster than the attacker. We create placeholders in PyPI first. The difference is that we will create them with low enough version instead of a higher one. Hence, when <code>pip</code> will query repositories for the specified package, it will receive responses from the internal registry as well as from PyPI. However, the package version from PyPI will be lower and <code>pip</code> will install the desired version.</p>
+<p>Nonetheless, creating and uploading a placeholder package for every internal package is an awful amount of work. That’s why we created <a href="https://github.com/pan-net-security/artifactory-pypi-scanner"><code>artifactory-pypi-scanner</code></a> which we use at Pan-Net. It lists all Python packages in a JFrog Artifactory instance. Then it checks whether they're present on PyPI and creates new ones with the same name if they do not exist on PyPI. What's more, when a conflicting package is found, the scanner will report it in a machine-readable format (<code>JSON</code>) for further processing.</p>
+<p>If you are interested, you can go-get it from source or download pre-built binaries from <a href="https://github.com/pan-net-security/artifactory-pypi-scanner/releases">releases</a>.</p>
+<pre data-lang="sh" style="background-color:#ffffff;color:#333333;" class="language-sh "><code class="language-sh" data-lang="sh"><span style="color:#7a3e9d;">go</span><span> get github.com/pan-net-security/artifactory-pypi-scanner
+</span></code></pre>
+<h3 id="example">Example</h3>
+<p><code>artifactory-pypi-scanner</code> is configured by environmental variables. For detailed usage instructions see <a href="https://github.com/pan-net-security/artifactory-pypi-scanner#configuration">configuration section</a> in the GitHub repository.</p>
+<pre data-lang="js" style="background-color:#ffffff;color:#333333;" class="language-js "><code class="language-js" data-lang="js"><span style="color:#7a3e9d;">$ artifactory</span><span style="color:#777777;">-</span><span style="color:#7a3e9d;">pypi</span><span style="color:#777777;">-</span><span style="color:#7a3e9d;">scanner </span><span style="color:#777777;">| </span><span style="color:#7a3e9d;">jq
+</span><span style="color:#777777;">{
+</span><span>  </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">error</span><span style="color:#777777;">&quot;</span><span>: </span><span style="color:#777777;">&quot;&quot;,
+</span><span>  </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">artifactoryPackages</span><span style="color:#777777;">&quot;</span><span>: </span><span style="color:#ab6526;">3</span><span style="color:#777777;">,
+</span><span>  </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">pypiPlaceholders</span><span style="color:#777777;">&quot;</span><span>: </span><span style="color:#ab6526;">2</span><span style="color:#777777;">,
+</span><span>  </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">repositoryResults</span><span style="color:#777777;">&quot;</span><span>: [
+</span><span>    </span><span style="color:#777777;">{
+</span><span>      </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">error</span><span style="color:#777777;">&quot;: &quot;&quot;,
+</span><span>      </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">url</span><span style="color:#777777;">&quot;: &quot;</span><span style="color:#448c27;">https://af.example.com/artifactory//repository1-pypi-local</span><span style="color:#777777;">&quot;,
+</span><span>      </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">packageResults</span><span style="color:#777777;">&quot;: </span><span>[
+</span><span>        </span><span style="color:#777777;">{
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">error</span><span style="color:#777777;">&quot;: &quot;&quot;,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">name</span><span style="color:#777777;">&quot;: &quot;</span><span style="color:#448c27;">package1</span><span style="color:#777777;">&quot;,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">isOurs</span><span style="color:#777777;">&quot;: </span><span style="color:#ab6526;">false</span><span style="color:#777777;">,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">created</span><span style="color:#777777;">&quot;: </span><span style="color:#ab6526;">false
+</span><span>        </span><span style="color:#777777;">}
+</span><span>      ]
+</span><span>    </span><span style="color:#777777;">},
+</span><span>    </span><span style="color:#777777;">{
+</span><span>      </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">error</span><span style="color:#777777;">&quot;: &quot;&quot;,
+</span><span>      </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">url</span><span style="color:#777777;">&quot;: &quot;</span><span style="color:#448c27;">https://af.example.com/artifactory//repository2-pypi-local</span><span style="color:#777777;">&quot;,
+</span><span>      </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">packageResults</span><span style="color:#777777;">&quot;: </span><span>[
+</span><span>        </span><span style="color:#777777;">{
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">error</span><span style="color:#777777;">&quot;: &quot;&quot;,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">name</span><span style="color:#777777;">&quot;: &quot;</span><span style="color:#448c27;">package2</span><span style="color:#777777;">&quot;,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">isOurs</span><span style="color:#777777;">&quot;: </span><span style="color:#ab6526;">true</span><span style="color:#777777;">,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">created</span><span style="color:#777777;">&quot;: </span><span style="color:#ab6526;">false
+</span><span>        </span><span style="color:#777777;">},
+</span><span>        </span><span style="color:#777777;">{
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">error</span><span style="color:#777777;">&quot;: &quot;&quot;,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">name</span><span style="color:#777777;">&quot;: &quot;</span><span style="color:#448c27;">package3</span><span style="color:#777777;">&quot;,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">isOurs</span><span style="color:#777777;">&quot;: </span><span style="color:#ab6526;">true</span><span style="color:#777777;">,
+</span><span>          </span><span style="color:#777777;">&quot;</span><span style="color:#448c27;">created</span><span style="color:#777777;">&quot;: </span><span style="color:#ab6526;">true
+</span><span>        </span><span style="color:#777777;">}
+</span><span>      ]
+</span><span>    </span><span style="color:#777777;">}
+</span><span>  ]
+</span><span style="color:#777777;">}
+</span></code></pre>
+<div class="footnote-definition" id="1"><sup class="footnote-definition-label">1</sup>
+<p>Please say you're not running <code>pip</code> with <code>sudo</code>.</p>
+</div>
+<div class="footnote-definition" id="2"><sup class="footnote-definition-label">2</sup>
+<p>For example A lets you set permissions only on a registry level. Thus, enabling anyone with access right to Artifactory to overwrite your Python package.</p>
+</div>
+
+
+
+</body>
+
+</html>

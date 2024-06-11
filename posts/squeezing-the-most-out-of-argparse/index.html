@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://matusf.github.io/reset.css">
+    <link rel="stylesheet" href="https://matusf.github.io/index.css">
+    <title>Matúš Ferech</title>
+</head>
+
+<body>
+    <!-- <nav class="post-nav before">
+        <ul>
+            <li><a href="/">Home</a></li>
+            <li><a href="/about">About</a></li>
+            <li><a href="/atom.xml">Feed</a></li>
+        </ul>
+    </nav> -->
+    
+
+<header id="title-block-header">
+    <h1 class="title">Squeezing the most out of argparse</h1>
+    <p class="author">
+        Matúš Ferech
+    </p>
+    <p class="date">2021-07-08</p>
+</header>
+<p>In this post, I would like to argue that Python's <code>argparse</code> is often the right tool for the job, and you do not need to install additional CLI argument parsers. The straightforward reason to choose it might be that you want to write a simple script that you pass to your colleagues, and you do not want to bother them with the installation of dependencies. You want to make it as portable as possible. However, I will try to show you that there are other ones.</p>
+<h2 id="getting-variables-from-env-as-well">Getting variables from env as well</h2>
+<p>Loading configuration from the environment is one of the <a href="https://12factor.net/config">prefered ways</a> to configure applications. With <code>argparse</code>, you can load variables from both the environment as well as from the command line. Good use for this combination is when you need to load secret variables. Secret variables should be loaded from the environment since anyone can inspect running processes (<code>ps</code>) that include all CLI arguments and thus see the secrets.</p>
+<pre data-lang="py" style="background-color:#ffffff;color:#333333;" class="language-py "><code class="language-py" data-lang="py"><span style="color:#4b83cd;">from </span><span>os </span><span style="color:#4b83cd;">import </span><span>getenv
+</span><span style="color:#4b83cd;">from </span><span>argparse </span><span style="color:#4b83cd;">import </span><span>ArgumentParser
+</span><span>
+</span><span>p </span><span style="color:#777777;">= </span><span style="color:#7a3e9d;">ArgumentParser</span><span style="color:#777777;">()
+</span><span>p</span><span style="color:#777777;">.</span><span style="color:#7a3e9d;">add_argument</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">--port</span><span style="color:#777777;">&#39;, </span><span style="color:#7a3e9d;">default</span><span style="color:#777777;">=</span><span style="color:#7a3e9d;">getenv</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">PORT</span><span style="color:#777777;">&#39;))
+</span></code></pre>
+<h3 id="making-sure-variables-are-loaded">Making sure variables are loaded</h3>
+<p>Now that we can load a variable from the environment we want to make sure that the variable is passed either as a command-line argument or as an environment variable. Adding <code>required=True</code> to <code>add_argument</code> does not help since then the default option is ignored. However, there is a neat trick we can do. The command-line argument will be required if we have not found the variable in env.</p>
+<pre data-lang="py" style="background-color:#ffffff;color:#333333;" class="language-py "><code class="language-py" data-lang="py"><span style="color:#4b83cd;">from </span><span>os </span><span style="color:#4b83cd;">import </span><span>getenv
+</span><span style="color:#4b83cd;">from </span><span>argparse </span><span style="color:#4b83cd;">import </span><span>ArgumentParser
+</span><span>
+</span><span>p </span><span style="color:#777777;">= </span><span style="color:#7a3e9d;">ArgumentParser</span><span style="color:#777777;">()
+</span><span>p</span><span style="color:#777777;">.</span><span style="color:#7a3e9d;">add_argument</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">--port</span><span style="color:#777777;">&#39;, </span><span style="color:#7a3e9d;">default</span><span style="color:#777777;">=</span><span style="color:#7a3e9d;">getenv</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">PORT</span><span style="color:#777777;">&#39;), </span><span style="color:#7a3e9d;">required</span><span style="color:#777777;">=not </span><span style="color:#7a3e9d;">getenv</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">PORT</span><span style="color:#777777;">&#39;))
+</span></code></pre>
+<h2 id="typed-environment-variables">Typed environment variables</h2>
+<p>The main advantage of <code>argparse</code> for me is that you can have typed environment variables. No need to convert environment variables to the desired type and manually handling exceptions. The type can be specified with a <code>type</code> keyword argument. Actually, <code>type</code> can be any callable that takes a string and returns the desired type. If it raises <code>TypeError</code> or <code>ValueError</code> a nice error message is displayed.</p>
+<p>You can take it one step further by writing your own parse function. If the parsing fails, raise an <code>ArgumentTypeError</code> with a help message which will be shown to the user. The following example shows how to parse a variable from the environment with additional constraints using <code>argparse</code>.</p>
+<pre data-lang="py" style="background-color:#ffffff;color:#333333;" class="language-py "><code class="language-py" data-lang="py"><span style="color:#4b83cd;">from </span><span>os </span><span style="color:#4b83cd;">import </span><span>getenv
+</span><span style="color:#4b83cd;">from </span><span>argparse </span><span style="color:#4b83cd;">import </span><span>ArgumentParser</span><span style="color:#777777;">, </span><span>ArgumentTypeError
+</span><span>
+</span><span>
+</span><span style="color:#4b83cd;">def </span><span style="font-weight:bold;color:#aa3731;">parse_port</span><span style="color:#777777;">(</span><span style="color:#7a3e9d;">n</span><span style="color:#777777;">):
+</span><span>    port </span><span style="color:#777777;">= </span><span style="color:#7a3e9d;">int</span><span style="color:#777777;">(</span><span>n</span><span style="color:#777777;">)
+</span><span>    </span><span style="color:#4b83cd;">if </span><span>port </span><span style="color:#777777;">&lt; </span><span style="color:#ab6526;">0</span><span style="color:#777777;">:
+</span><span>        </span><span style="color:#4b83cd;">raise </span><span style="color:#7a3e9d;">ArgumentTypeError</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">must be non-negative</span><span style="color:#777777;">&#39;)
+</span><span>    </span><span style="color:#4b83cd;">return </span><span>port
+</span><span>
+</span><span>
+</span><span>p </span><span style="color:#777777;">= </span><span style="color:#7a3e9d;">ArgumentParser</span><span style="color:#777777;">()
+</span><span>p</span><span style="color:#777777;">.</span><span style="color:#7a3e9d;">add_argument</span><span style="color:#777777;">(
+</span><span>    </span><span style="color:#777777;">&#39;</span><span style="color:#448c27;">--port</span><span style="color:#777777;">&#39;,
+</span><span>    </span><span style="color:#7a3e9d;">default</span><span style="color:#777777;">=</span><span style="color:#7a3e9d;">getenv</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">PORT</span><span style="color:#777777;">&#39;),
+</span><span>    </span><span style="color:#7a3e9d;">required</span><span style="color:#777777;">=not </span><span style="color:#7a3e9d;">getenv</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">PORT</span><span style="color:#777777;">&#39;),
+</span><span>    </span><span style="color:#7a3e9d;">type</span><span style="color:#777777;">=</span><span>parse_port</span><span style="color:#777777;">,
+</span><span style="color:#777777;">)
+</span><span>p</span><span style="color:#777777;">.</span><span style="color:#7a3e9d;">parse_args</span><span style="color:#777777;">()
+</span></code></pre>
+<p>After running it, we see a nice help message.</p>
+<pre data-lang="txt" style="background-color:#ffffff;color:#333333;" class="language-txt "><code class="language-txt" data-lang="txt"><span>python x.py --port -1
+</span><span>usage: x.py [-h] --port PORT
+</span><span>x.py: error: argument --port: must be non-negative
+</span></code></pre>
+<hr />
+<p>There is one gotcha though. Loading boolean variables from the environment and specifying <code>type</code> as <code>bool</code> is not sufficient since every non-empty string is considered to be true (even <code>&quot;false&quot;</code>, <code>&quot;no&quot;</code> etc.). Therefore we need to use a different function, like <code>strtobool</code> as shown below.</p>
+<pre data-lang="py" style="background-color:#ffffff;color:#333333;" class="language-py "><code class="language-py" data-lang="py"><span style="color:#4b83cd;">from </span><span>os </span><span style="color:#4b83cd;">import </span><span>getenv
+</span><span style="color:#4b83cd;">from </span><span>argparse </span><span style="color:#4b83cd;">import </span><span>ArgumentParser
+</span><span style="color:#4b83cd;">from </span><span>distutils</span><span style="color:#777777;">.</span><span>util </span><span style="color:#4b83cd;">import </span><span>strtobool
+</span><span>
+</span><span>p </span><span style="color:#777777;">= </span><span style="color:#7a3e9d;">ArgumentParser</span><span style="color:#777777;">()
+</span><span>p</span><span style="color:#777777;">.</span><span style="color:#7a3e9d;">add_argument</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">--foo</span><span style="color:#777777;">&#39;, </span><span style="color:#7a3e9d;">default</span><span style="color:#777777;">=</span><span style="color:#7a3e9d;">getenv</span><span style="color:#777777;">(&#39;</span><span style="color:#448c27;">foo</span><span style="color:#777777;">&#39;), </span><span style="color:#7a3e9d;">type</span><span style="color:#777777;">=</span><span style="color:#4b83cd;">lambda </span><span style="color:#7a3e9d;">x</span><span style="color:#777777;">: </span><span style="color:#7a3e9d;">bool</span><span style="color:#777777;">(</span><span style="color:#7a3e9d;">strtobool</span><span style="color:#777777;">(</span><span>x</span><span style="color:#777777;">)))
+</span></code></pre>
+<p>The result of <code>strtobool</code> is wrapped in <code>bool</code> because unfortunately, it returns an int instead of bool (for <a href="https://bugs.python.org/issue27721">historical reasons</a>).</p>
+
+
+
+</body>
+
+</html>
